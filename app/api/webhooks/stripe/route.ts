@@ -133,7 +133,7 @@ async function handleCheckoutCompleted(
       type: "recovery",
       email: resolvedEmail,
       options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/app`,
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/update-password`,
       },
     })
 
