@@ -72,56 +72,73 @@ async function handleCheckoutCompleted(
   const metadata = session.metadata || {}
   const { email, firstName, lastName, company, phone } = metadata
 
-  if (!email) {
-    console.error("No email in checkout session metadata")
+  console.log("Webhook metadata:", JSON.stringify(metadata))
+  console.log("Session customer_email:", session.customer_email)
+
+  // Fall back to customer_email if metadata email is missing
+  const resolvedEmail = email || session.customer_email || null
+
+  if (!resolvedEmail) {
+    console.error("❌ No email found in metadata or customer_email. Session:", session.id)
     return
   }
 
-  // Check if user already exists
-  const { data: existingUsers } = await supabase.auth.admin.listUsers()
-  const existingUser = existingUsers?.users?.find(u => u.email === email)
+  const resolvedFirstName = firstName || resolvedEmail.split("@")[0]
+  const resolvedLastName = lastName || ""
+  const resolvedCompany = company || resolvedEmail.split("@")[0]
+
+  // Check if user already exists via profiles table (much faster than listUsers)
+  const { data: existingProfile } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("email", resolvedEmail)
+    .single()
 
   let userId: string
 
-  if (existingUser) {
-    userId = existingUser.id
+  if (existingProfile) {
+    userId = existingProfile.id
   } else {
     // Create Supabase user
     const tempPassword = Math.random().toString(36).slice(-16) + "A1!"
     const { data: newUser, error: userError } = await supabase.auth.admin.createUser({
-      email,
+      email: resolvedEmail,
       password: tempPassword,
       email_confirm: true,
       user_metadata: {
-        full_name: `${firstName} ${lastName}`,
+        full_name: `${resolvedFirstName} ${resolvedLastName}`.trim(),
         role: "customer",
       },
     })
 
     if (userError || !newUser.user) {
-      console.error("Failed to create user:", userError)
+      console.error("❌ Failed to create user:", userError)
       return
     }
 
     userId = newUser.user.id
+    console.log("✅ Created user:", userId)
 
     // Generate a password-setup link and email it to the customer
-    const { data: linkData } = await supabase.auth.admin.generateLink({
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
       type: "recovery",
-      email,
+      email: resolvedEmail,
       options: {
         redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/app`,
       },
     })
 
+    if (linkError) console.error("❌ generateLink error:", linkError)
+
     const loginLink = linkData?.properties?.action_link || `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`
+    console.log("Login link generated:", !!linkData?.properties?.action_link)
 
     await sendWelcomeEmail({
-      email,
-      firstName: firstName || "there",
-      company: company || "your company",
+      email: resolvedEmail,
+      firstName: resolvedFirstName,
+      company: resolvedCompany,
       loginLink,
-    }).catch(err => console.error("Welcome email failed:", err))
+    }).catch(err => console.error("❌ Welcome email failed:", err))
   }
 
   // Update profile
@@ -129,8 +146,8 @@ async function handleCheckoutCompleted(
     .from("profiles")
     .upsert({
       id: userId,
-      email,
-      full_name: `${firstName} ${lastName}`,
+      email: resolvedEmail,
+      full_name: `${resolvedFirstName} ${resolvedLastName}`.trim(),
       phone: phone || null,
       role: "customer",
     })
@@ -149,7 +166,7 @@ async function handleCheckoutCompleted(
     const { data: newOrg, error: orgError } = await supabase
       .from("organizations")
       .insert({
-        name: company,
+        name: resolvedCompany,
         owner_id: userId,
         province: "ON",
         stripe_customer_id: session.customer as string || null,
@@ -265,13 +282,13 @@ async function handleCheckoutCompleted(
   // Notify admin of new order
   if (order) {
     await sendAdminNewOrderNotification({
-      customerEmail: email,
-      company: company || "Unknown",
+      customerEmail: resolvedEmail,
+      company: resolvedCompany,
       orderId: order.id,
-    }).catch(err => console.error("Admin notification email failed:", err))
+    }).catch(err => console.error("❌ Admin notification email failed:", err))
   }
 
-  console.log(`✅ Created account for ${email}, org: ${orgId}`)
+  console.log(`✅ Created account for ${resolvedEmail}, org: ${orgId}`)
 }
 
 // ============================================================
