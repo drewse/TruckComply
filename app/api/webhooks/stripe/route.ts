@@ -112,12 +112,21 @@ async function handleCheckoutCompleted(
     })
 
     if (userError || !newUser.user) {
-      console.error("❌ Failed to create user:", userError)
-      return
+      // User may already exist in auth but without a profile row (prior failed webhook)
+      // Fall back to finding them via listUsers
+      console.warn("⚠️ createUser failed, checking for existing auth user:", userError?.message)
+      const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 })
+      const existingAuthUser = listData?.users?.find(u => u.email === resolvedEmail)
+      if (!existingAuthUser) {
+        console.error("❌ Failed to create user and no existing auth user found:", userError)
+        return
+      }
+      userId = existingAuthUser.id
+      console.log("✅ Found existing auth user:", userId)
+    } else {
+      userId = newUser.user.id
+      console.log("✅ Created user:", userId)
     }
-
-    userId = newUser.user.id
-    console.log("✅ Created user:", userId)
 
     // Generate a password-setup link and email it to the customer
     const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
