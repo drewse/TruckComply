@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { createAdminClient } from "@/lib/supabase/server"
+import { sendWelcomeEmail, sendAdminNewOrderNotification } from "@/lib/email"
 import type Stripe from "stripe"
 
 export async function POST(request: NextRequest) {
@@ -104,11 +105,23 @@ async function handleCheckoutCompleted(
 
     userId = newUser.user.id
 
-    // TODO: Send password reset email so user can set their own password
-    await supabase.auth.admin.generateLink({
+    // Generate a password-setup link and email it to the customer
+    const { data: linkData } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email,
+      options: {
+        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/app`,
+      },
     })
+
+    const loginLink = linkData?.properties?.action_link || `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`
+
+    await sendWelcomeEmail({
+      email,
+      firstName: firstName || "there",
+      company: company || "your company",
+      loginLink,
+    }).catch(err => console.error("Welcome email failed:", err))
   }
 
   // Update profile
@@ -248,6 +261,15 @@ async function handleCheckoutCompleted(
     entity_id: order?.id,
     metadata: { session_id: session.id, amount: session.amount_total },
   })
+
+  // Notify admin of new order
+  if (order) {
+    await sendAdminNewOrderNotification({
+      customerEmail: email,
+      company: company || "Unknown",
+      orderId: order.id,
+    }).catch(err => console.error("Admin notification email failed:", err))
+  }
 
   console.log(`✅ Created account for ${email}, org: ${orgId}`)
 }
