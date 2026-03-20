@@ -15,19 +15,27 @@ export default function UpdatePasswordPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Check for error in hash (e.g. expired link)
-    const hash = window.location.hash
-    if (hash.includes("error=")) {
+    // Check for error in hash (expired/invalid link)
+    if (window.location.hash.includes("error=")) {
       setLinkExpired(true)
       return
     }
 
-    // Check if there's already an active session from the hash token
+    // PKCE flow: ?code= in query string — exchange for session
+    const code = new URLSearchParams(window.location.search).get("code")
+    if (code) {
+      supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+        if (error) setLinkExpired(true)
+        else setReady(true)
+      })
+      return
+    }
+
+    // Implicit flow: tokens in hash — check session directly
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true)
     })
 
-    // Also listen for PASSWORD_RECOVERY in case it fires after mount
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
         setReady(true)
