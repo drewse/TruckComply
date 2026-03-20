@@ -40,14 +40,19 @@ export function DocumentUpload({ orgId, userId }: DocumentUploadProps) {
 
     try {
       for (const file of files) {
-        const filePath = `${orgId}/${Date.now()}-${file.name}`
+        // Sanitize filename — remove special chars that break storage paths
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_")
+        const filePath = `${orgId}/${Date.now()}-${safeName}`
 
         // Upload to Supabase Storage
         const { error: storageError } = await supabase.storage
           .from("documents")
-          .upload(filePath, file)
+          .upload(filePath, file, { upsert: false })
 
-        if (storageError) throw storageError
+        if (storageError) {
+          console.error("Storage upload error:", storageError)
+          throw new Error(storageError.message)
+        }
 
         // Create document record
         const { error: dbError } = await supabase
@@ -62,7 +67,10 @@ export function DocumentUpload({ orgId, userId }: DocumentUploadProps) {
             status: "pending",
           })
 
-        if (dbError) throw dbError
+        if (dbError) {
+          console.error("DB insert error:", dbError)
+          throw new Error(dbError.message)
+        }
       }
 
       setFiles([])
@@ -70,7 +78,15 @@ export function DocumentUpload({ orgId, userId }: DocumentUploadProps) {
       router.refresh()
       setTimeout(() => setSuccess(false), 3000)
     } catch (err) {
-      setError("Upload failed. Please try again.")
+      const msg = err instanceof Error ? err.message : "Upload failed"
+      if (msg.includes("Bucket not found")) {
+        setError("Storage not configured. Please contact support.")
+      } else if (msg.includes("row-level security")) {
+        setError("Permission error. Please refresh and try again.")
+      } else {
+        setError("Upload failed. Please try again.")
+      }
+      console.error("Upload error:", err)
     } finally {
       setUploading(false)
     }

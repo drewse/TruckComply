@@ -63,11 +63,14 @@ export default async function CustomerOverviewPage() {
 
   const firstName = profile?.full_name?.split(" ")[0] || "there"
 
+  const hour = new Date().getHours()
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
+
   return (
     <div className="p-6 max-w-6xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Good morning, {firstName}</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{greeting}, {firstName}</h1>
         <p className="text-gray-500 mt-1">
           {org?.name || "Your organization"} — Compliance Dashboard
         </p>

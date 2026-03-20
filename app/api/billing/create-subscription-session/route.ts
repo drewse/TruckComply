@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { stripe, MONTHLY_AMOUNT } from "@/lib/stripe"
+import { stripe, MONTHLY_AMOUNT, assertStripeConfigured } from "@/lib/stripe"
 import { createClient } from "@/lib/supabase/server"
 
 export async function POST(request: NextRequest) {
@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    assertStripeConfigured()
     const body = await request.json()
     const { orgId } = body
 

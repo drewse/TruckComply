@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { stripe, SETUP_FEE_AMOUNT } from "@/lib/stripe"
+import { stripe, SETUP_FEE_AMOUNT, assertStripeConfigured } from "@/lib/stripe"
 import { z } from "zod"
 
 const schema = z.object({
@@ -12,6 +12,7 @@ const schema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
+    assertStripeConfigured()
     const body = await request.json()
     const data = schema.parse(body)
 

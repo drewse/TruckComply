@@ -122,36 +122,37 @@ async function handleCheckoutCompleted(
         return
       }
       userId = existingAuthUser.id
-      console.log("✅ Found existing auth user:", userId)
+      console.log("✅ Found existing auth user (recovery path):", userId)
+      // Don't resend welcome email — user was already created previously
     } else {
       userId = newUser.user.id
-      console.log("✅ Created user:", userId)
+      console.log("✅ Created new user:", userId)
+
+      // Generate a password-setup link and email it to the customer
+      const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+        type: "recovery",
+        email: resolvedEmail,
+        options: {
+          redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/update-password`,
+        },
+      })
+
+      if (linkError) console.error("❌ generateLink error:", linkError)
+
+      const loginLink = linkData?.properties?.action_link || `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`
+      console.log("🔗 Login link generated:", !!linkData?.properties?.action_link)
+
+      await sendWelcomeEmail({
+        email: resolvedEmail,
+        firstName: resolvedFirstName,
+        company: resolvedCompany,
+        loginLink,
+      }).catch(err => console.error("❌ Welcome email failed:", err))
     }
-
-    // Generate a password-setup link and email it to the customer
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: "recovery",
-      email: resolvedEmail,
-      options: {
-        redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/update-password`,
-      },
-    })
-
-    if (linkError) console.error("❌ generateLink error:", linkError)
-
-    const loginLink = linkData?.properties?.action_link || `${process.env.NEXT_PUBLIC_APP_URL}/auth/login`
-    console.log("Login link generated:", !!linkData?.properties?.action_link)
-
-    await sendWelcomeEmail({
-      email: resolvedEmail,
-      firstName: resolvedFirstName,
-      company: resolvedCompany,
-      loginLink,
-    }).catch(err => console.error("❌ Welcome email failed:", err))
   }
 
-  // Update profile
-  await supabase
+  // Ensure profile row always exists (safety net if trigger failed)
+  const { error: profileError } = await supabase
     .from("profiles")
     .upsert({
       id: userId,
@@ -159,7 +160,14 @@ async function handleCheckoutCompleted(
       full_name: `${resolvedFirstName} ${resolvedLastName}`.trim(),
       phone: phone || null,
       role: "customer",
-    })
+    }, { onConflict: "id" })
+
+  if (profileError) {
+    console.error("❌ Profile upsert failed:", profileError)
+    // Non-fatal — continue to create org/order
+  } else {
+    console.log("✅ Profile upserted:", userId)
+  }
 
   // Create or find organization
   let orgId: string

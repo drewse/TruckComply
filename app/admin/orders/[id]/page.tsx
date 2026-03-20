@@ -4,7 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { OrderStatusBadge, TaskStatusBadge } from "@/components/dashboard/status-badge"
 import { Badge } from "@/components/ui/badge"
 import { OrderManagement } from "./order-management"
+import { AdminDocumentActions } from "./document-actions"
 import { formatDate, formatCurrency } from "@/lib/utils"
+import { Clock } from "lucide-react"
 
 interface Props {
   params: Promise<{ id: string }>
@@ -123,21 +125,46 @@ export default async function AdminOrderDetailPage({ params }: Props) {
           </Card>
 
           {/* Documents */}
-          {order.documents && order.documents.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Customer Documents</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <AdminDocumentActions
+                documents={(order.documents || []) as { id: string; name: string; file_path: string; status: string; created_at: string; file_size: number | null }[]}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Activity Log */}
+          {order.notes && order.notes.length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle>Documents</CardTitle>
+                <CardTitle>Activity Log</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
-                  {(order.documents as { id: string; name: string; status: string; created_at: string }[]).map((doc) => (
-                    <div key={doc.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg text-sm">
-                      <span className="text-gray-800">{doc.name}</span>
-                      <Badge variant={doc.status === "approved" ? "success" : doc.status === "rejected" ? "destructive" : "warning"}>
-                        {doc.status}
-                      </Badge>
-                    </div>
-                  ))}
+                <div className="space-y-3">
+                  {(order.notes as { id: string; content: string; created_at: string; is_internal: boolean; profiles: { full_name: string | null; role: string } | null }[])
+                    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+                    .map((note) => (
+                      <div key={note.id} className="flex gap-3">
+                        <div className="mt-0.5 shrink-0">
+                          <Clock className="h-4 w-4 text-gray-400" />
+                        </div>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-0.5">
+                            <span className="text-xs font-medium text-gray-700">
+                              {note.profiles?.full_name || "Team"}
+                            </span>
+                            {note.is_internal && (
+                              <Badge variant="secondary" className="text-xs py-0">internal</Badge>
+                            )}
+                            <span className="text-xs text-gray-400">{formatDate(note.created_at)}</span>
+                          </div>
+                          <p className="text-sm text-gray-700">{note.content}</p>
+                        </div>
+                      </div>
+                    ))}
                 </div>
               </CardContent>
             </Card>

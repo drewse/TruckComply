@@ -2,10 +2,10 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DocumentStatusBadge } from "@/components/dashboard/status-badge"
-import { Button } from "@/components/ui/button"
 import { DocumentUpload } from "./document-upload"
+import { DocumentDownloadButton } from "@/components/dashboard/document-download-button"
 import { formatDate } from "@/lib/utils"
-import { FileText, Download } from "lucide-react"
+import { FileText } from "lucide-react"
 
 export default async function DocumentsPage() {
   const supabase = await createClient()
@@ -63,8 +63,15 @@ export default async function DocumentsPage() {
                       <p className="text-xs text-orange-600 mt-1">{doc.notes}</p>
                     )}
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <DocumentStatusBadge status={doc.status} />
+                    {doc.file_path && (
+                      <DocumentDownloadButton
+                        filePath={doc.file_path}
+                        fileName={doc.name}
+                        variant="icon"
+                      />
+                    )}
                   </div>
                 </div>
               ))}

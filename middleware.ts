@@ -38,7 +38,15 @@ export async function middleware(request: NextRequest) {
     if (!user) {
       return NextResponse.redirect(new URL("/auth/login?redirect=/admin", request.url))
     }
-    // Role check happens in the admin layout
+    // Role check: query profile for admin role
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single()
+    if (profile?.role !== "admin") {
+      return NextResponse.redirect(new URL("/app", request.url))
+    }
   }
 
   // Protected partner routes
