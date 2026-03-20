@@ -10,10 +10,18 @@ export default function UpdatePasswordPage() {
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
   const [ready, setReady] = useState(false)
+  const [linkExpired, setLinkExpired] = useState(false)
   const router = useRouter()
   const supabase = createClient()
 
   useEffect(() => {
+    // Check for error in hash (e.g. expired link)
+    const hash = window.location.hash
+    if (hash.includes("error=")) {
+      setLinkExpired(true)
+      return
+    }
+
     // Check if there's already an active session from the hash token
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true)
@@ -50,6 +58,25 @@ export default function UpdatePasswordPage() {
     } else {
       router.push("/app")
     }
+  }
+
+  if (linkExpired) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#f9fafb", padding: "20px" }}>
+        <div style={{ width: "100%", maxWidth: 400, background: "white", borderRadius: 12, padding: "40px 32px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)", textAlign: "center" }}>
+          <h2 style={{ color: "#111827", marginBottom: 12 }}>Link expired</h2>
+          <p style={{ color: "#6b7280", fontSize: 14, marginBottom: 24 }}>
+            This password setup link has already been used or expired. Use the button below to get a new one.
+          </p>
+          <a
+            href="/auth/login"
+            style={{ display: "inline-block", background: "#ea580c", color: "white", padding: "12px 24px", borderRadius: 8, textDecoration: "none", fontWeight: 600, fontSize: 14 }}
+          >
+            Go to login / reset password
+          </a>
+        </div>
+      </div>
+    )
   }
 
   if (!ready) {
