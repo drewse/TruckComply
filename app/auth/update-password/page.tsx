@@ -15,14 +15,31 @@ export default function UpdatePasswordPage() {
   const supabase = createClient()
 
   useEffect(() => {
-    // Check for error in hash (expired/invalid link)
-    if (window.location.hash.includes("error=")) {
+    const hash = window.location.hash
+    const query = new URLSearchParams(window.location.search)
+
+    // Error in hash (expired/invalid link)
+    if (hash.includes("error=")) {
       setLinkExpired(true)
       return
     }
 
-    // PKCE flow: ?code= in query string — exchange for session
-    const code = new URLSearchParams(window.location.search).get("code")
+    // Implicit flow: access_token is in the hash — extract and set session manually
+    if (hash.includes("access_token=")) {
+      const hashParams = new URLSearchParams(hash.substring(1))
+      const access_token = hashParams.get("access_token")
+      const refresh_token = hashParams.get("refresh_token") ?? ""
+      if (access_token) {
+        supabase.auth.setSession({ access_token, refresh_token }).then(({ error }) => {
+          if (error) setLinkExpired(true)
+          else setReady(true)
+        })
+        return
+      }
+    }
+
+    // PKCE flow: code is in query string
+    const code = query.get("code")
     if (code) {
       supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
         if (error) setLinkExpired(true)
@@ -31,17 +48,11 @@ export default function UpdatePasswordPage() {
       return
     }
 
-    // Implicit flow: tokens in hash — check session directly
+    // Already signed in
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) setReady(true)
+      else setLinkExpired(true)
     })
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || (event === "SIGNED_IN" && session)) {
-        setReady(true)
-      }
-    })
-    return () => subscription.unsubscribe()
   }, [supabase])
 
   async function handleSubmit(e: React.FormEvent) {
